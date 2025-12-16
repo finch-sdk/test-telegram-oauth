@@ -4,9 +4,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Telegram OAuth</title>
+    <script>
+            function getHashParams() {
+                const hash = window.location.hash.substring(1);
+                if (hash) {
+                    try {
+                        const decoded = atob(hash);
+                        return JSON.parse(decoded);
+                    } catch (e) {
+                        const params = {};
+                        hash.split('&').forEach(item => {
+                            const [key, value] = item.split('=');
+                            if (key && value) {
+                                params[decodeURIComponent(key)] = decodeURIComponent(value);
+                            }
+                        });
+                        return Object.keys(params).length > 0 ? params : null;
+                    }
+                }
+                return null;
+            }
+            function getQueryParams() {
+                const params = new URLSearchParams(window.location.search);
+                const result = {};
+                for (const [key, value] of params.entries()) {
+                    result[key] = value;
+                }
+                return Object.keys(result).length > 0 ? result : null;
+            }
+            let authData = getHashParams() || getQueryParams();
+            if (authData && authData.id && authData.hash) {
+                const callbackUrl = 'easypoker://telegram-auth?' + new URLSearchParams(authData).toString();
+                window.location.href = callbackUrl;
+                document.body.innerHTML = '<h1>Authorization Successful!</h1><p>Redirecting to app...</p>';
+            } else {
+                document.body.innerHTML = '<h1>Telegram OAuth Domain</h1><p>This domain is used for Telegram OAuth verification.</p><p>No authorization data found.</p>';
+            }
+    </script>
 </head>
 <body>
-    <h1>Telegram OAuth Domain</h1>
-    <p>This domain is used for Telegram OAuth verification.</p>
+    <h1>Telegram OAuth</h1>
+    <p>Loading...</p>
 </body>
 </html>
