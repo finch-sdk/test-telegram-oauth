@@ -4,46 +4,51 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Telegram OAuth</title>
-    <script>
-            function getHashParams() {
-                const hash = window.location.hash.substring(1);
-                if (hash) {
-                    try {
-                        const decoded = atob(hash);
-                        return JSON.parse(decoded);
-                    } catch (e) {
-                        const params = {};
-                        hash.split('&').forEach(item => {
-                            const [key, value] = item.split('=');
-                            if (key && value) {
-                                params[decodeURIComponent(key)] = decodeURIComponent(value);
-                            }
-                        });
-                        return Object.keys(params).length > 0 ? params : null;
-                    }
-                }
-                return null;
-            }
-            function getQueryParams() {
-                const params = new URLSearchParams(window.location.search);
-                const result = {};
-                for (const [key, value] of params.entries()) {
-                    result[key] = value;
-                }
-                return Object.keys(result).length > 0 ? result : null;
-            }
-            let authData = getHashParams() || getQueryParams();
-            if (authData && authData.id && authData.hash) {
-                const callbackUrl = 'easypoker://telegram-auth?' + new URLSearchParams(authData).toString();
-                window.location.href = callbackUrl;
-                document.body.innerHTML = '<h1>Authorization Successful!</h1><p>Redirecting to app...</p>';
-            } else {
-                document.body.innerHTML = '<h1>Telegram OAuth Domain</h1><p>This domain is used for Telegram OAuth verification.</p><p>No authorization data found.</p>';
-            }
-    </script>
 </head>
 <body>
     <h1>Telegram OAuth</h1>
-    <p>Loading...</p>
+    <div id="content">
+        <p>Loading...</p>
+    </div>
+
+    <script>
+        const contentEl = document.getElementById('content');
+
+        // 讀取 URL 上的授權資料（data-auth-url redirect 會帶在 query 上）
+        function getAuthDataFromQuery() {
+            const params = new URLSearchParams(window.location.search);
+            const result = {};
+            for (const [key, value] of params.entries()) {
+                result[key] = value;
+            }
+            return Object.keys(result).length > 0 ? result : null;
+        }
+
+        // 情況 1：從 Telegram Login Widget 授權回來，URL 上有 id / hash 等參數
+        const authData = getAuthDataFromQuery();
+
+        if (authData && authData.id && authData.hash) {
+            // 將 Telegram 回傳的參數原樣帶回 App（URL Scheme）
+            const callbackUrl = 'easypoker://telegram-auth?' + new URLSearchParams(authData).toString();
+
+            // 嘗試喚起 App
+            window.location.href = callbackUrl;
+
+            contentEl.innerHTML = '<p>Authorization successful. Redirecting to app...</p>';
+        } else {
+            // 情況 2：首次打開頁面，顯示 Telegram Login Widget
+            contentEl.innerHTML = '<p>Please login with Telegram:</p><div id="tg-login"></div>';
+
+            const script = document.createElement('script');
+            script.async = true;
+            script.src = "https://telegram.org/js/telegram-widget.js?22";
+            script.setAttribute('data-telegram-login', 'testTgSignIn_bot'); // 你的 bot username（不要帶 @）
+            script.setAttribute('data-size', 'large');
+            script.setAttribute('data-auth-url', 'https://finch-sdk.github.io/test-telegram-oauth'); // 本頁 URL
+            script.setAttribute('data-request-access', 'write');
+
+            document.getElementById('tg-login').appendChild(script);
+        }
+    </script>
 </body>
 </html>
