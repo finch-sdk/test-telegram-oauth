@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Telegram OAuth</title>
 </head>
+
 <body>
     <h1>Telegram OAuth</h1>
     <div id="content">
@@ -16,39 +18,76 @@
         const url = new URL(window.location.href);
         const params = url.searchParams;
         const botUsername = params.get('bot');
+        const botId = params.get('bot_id');
         const callbackBase = params.get('cb');
+        const mode = params.get('mode') || 'redirect';
 
         function getAuthDataFromQuery() {
             const p = new URLSearchParams(window.location.search);
             const result = {};
             for (const [key, value] of p.entries()) {
-                if (key === 'bot' || key === 'cb') continue;
+                if (key === 'bot' || key === 'bot_id' || key === 'cb' || key === 'mode') continue;
                 result[key] = value;
             }
             return Object.keys(result).length > 0 ? result : null;
         }
 
-        const authData = getAuthDataFromQuery();
-
-        if (authData && authData.id && authData.hash) {
+        function handleAuthCallback(authData) {
+            if (!authData || !authData.id || !authData.hash || !callbackBase) {
+                return false;
+            }
             const callbackUrl = callbackBase + '?' + new URLSearchParams(authData).toString();
             console.log('[Telegram OAuth] Redirecting to app:', callbackUrl);
             window.location.href = callbackUrl;
             contentEl.innerHTML = '<p>Authorization successful. Redirecting to app...</p>';
-        } else {
+            return true;
+        }
+
+        function handleRedirectMode() {
+            if (!botId || !callbackBase) {
+                console.error('[Telegram OAuth] redirect mode requires bot_id and cb');
+                contentEl.innerHTML = '<p>Telegram configuration error (missing bot_id or cb).</p>';
+                return;
+            }
+            const originDomain = url.host; 
+            const returnTo = url.origin + url.pathname
+                + '?bot_id=' + encodeURIComponent(botId)
+                + '&cb=' + encodeURIComponent(callbackBase)
+                + '&mode=redirect';
+            const oauthUrl = new URL('https://oauth.telegram.org/auth');
+            oauthUrl.searchParams.set('bot_id', botId);
+            oauthUrl.searchParams.set('origin', originDomain);
+            oauthUrl.searchParams.set('request_access', 'write');
+            oauthUrl.searchParams.set('return_to', returnTo);
+            contentEl.innerHTML = '<p>Redirecting to Telegram...</p>';
+            window.location.replace(oauthUrl.toString());
+        }
+
+        function showWidgetLogin() {
             contentEl.innerHTML = '<p>Please login with Telegram:</p><div id="tg-login"></div>';
             const script = document.createElement('script');
             script.async = true;
-            script.src = "https://telegram.org/js/telegram-widget.js?22";
+            script.src = 'https://telegram.org/js/telegram-widget.js?22';
             script.setAttribute('data-telegram-login', botUsername);
             script.setAttribute('data-size', 'large');
             const authUrl = url.origin + url.pathname
-                + '?bot=' + encodeURIComponent(botUsername)
-                + '&cb=' + encodeURIComponent(callbackBase);
+                + '?bot=' + encodeURIComponent(botUsername || '')
+                + '&cb=' + encodeURIComponent(callbackBase || '')
+                + '&mode=widget';
             script.setAttribute('data-auth-url', authUrl);
             script.setAttribute('data-request-access', 'write');
             document.getElementById('tg-login').appendChild(script);
         }
+
+        const authData = getAuthDataFromQuery();
+        if (!handleAuthCallback(authData)) {
+            if (mode === 'redirect') {
+                handleRedirectMode();
+            } else {
+                showWidgetLogin();
+            }
+        }
     </script>
 </body>
+
 </html>
