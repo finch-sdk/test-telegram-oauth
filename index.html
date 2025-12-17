@@ -52,7 +52,7 @@
 
             setTimeout(() => {
                 window.location.href = callbackUrl;
-            }, 5000);
+            }, 10000);
 
             return true;
         }
@@ -75,11 +75,17 @@
             oauthUrl.searchParams.set('return_to', returnTo);
 
             const oauthUrlString = oauthUrl.toString();
+
+            // 重新抓一次目前頁面的 authData，便於偵錯
+            const currentAuthData = getAuthDataFromQuery();
+            const prettyAuthData = JSON.stringify(currentAuthData, null, 2);
+
             console.log('[Telegram OAuth] Redirecting to oauth.telegram.org (in 5s):', oauthUrlString, {
                 botId,
                 callbackBase,
                 originDomain,
                 returnTo,
+                authData: currentAuthData,
             });
 
             // 在頁面上顯示即將跳轉的資訊，5 秒後再真正跳轉
@@ -90,12 +96,14 @@
                 <p><strong>callbackBase (cb):</strong> ${callbackBase}</p>
                 <p><strong>originDomain:</strong> ${originDomain}</p>
                 <p><strong>return_to:</strong> ${returnTo}</p>
+                <p><strong>authData (from getAuthDataFromQuery):</strong></p>
+                <pre style="text-align:left; white-space:pre-wrap;">${prettyAuthData}</pre>
                 <pre style="text-align:left; white-space:pre-wrap;">${oauthUrlString}</pre>
             `;
 
             setTimeout(() => {
                 window.location.replace(oauthUrlString);
-            }, 5000);
+            }, 10000);
         }
 
         function showWidgetLogin() {
