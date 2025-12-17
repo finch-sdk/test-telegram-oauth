@@ -37,9 +37,23 @@
                 return false;
             }
             const callbackUrl = callbackBase + '?' + new URLSearchParams(authData).toString();
-            console.log('[Telegram OAuth] Redirecting to app:', callbackUrl);
-            window.location.href = callbackUrl;
-            contentEl.innerHTML = '<p>Authorization successful. Redirecting to app...</p>';
+            console.log('[Telegram OAuth] Redirecting to app (in 5s):', callbackUrl, authData);
+
+            // 在頁面上顯示授權資料，5 秒後再跳轉回 App
+            const prettyAuthData = JSON.stringify(authData, null, 2);
+            contentEl.innerHTML = `
+                <h2>Telegram OAuth Debug</h2>
+                <p>Authorization successful. Will redirect to app in 5 seconds...</p>
+                <p><strong>callbackBase:</strong> ${callbackBase}</p>
+                <p><strong>authData.id:</strong> ${authData.id}</p>
+                <p><strong>authData.hash:</strong> ${authData.hash}</p>
+                <pre style="text-align:left; white-space:pre-wrap;">${prettyAuthData}</pre>
+            `;
+
+            setTimeout(() => {
+                window.location.href = callbackUrl;
+            }, 5000);
+
             return true;
         }
 
@@ -59,8 +73,29 @@
             oauthUrl.searchParams.set('origin', originDomain);
             oauthUrl.searchParams.set('request_access', 'write');
             oauthUrl.searchParams.set('return_to', returnTo);
-            contentEl.innerHTML = '<p>Redirecting to Telegram...</p>';
-            window.location.replace(oauthUrl.toString());
+
+            const oauthUrlString = oauthUrl.toString();
+            console.log('[Telegram OAuth] Redirecting to oauth.telegram.org (in 5s):', oauthUrlString, {
+                botId,
+                callbackBase,
+                originDomain,
+                returnTo,
+            });
+
+            // 在頁面上顯示即將跳轉的資訊，5 秒後再真正跳轉
+            contentEl.innerHTML = `
+                <h2>Telegram OAuth Redirect Debug</h2>
+                <p>Will redirect to Telegram in 5 seconds...</p>
+                <p><strong>botId:</strong> ${botId}</p>
+                <p><strong>callbackBase (cb):</strong> ${callbackBase}</p>
+                <p><strong>originDomain:</strong> ${originDomain}</p>
+                <p><strong>return_to:</strong> ${returnTo}</p>
+                <pre style="text-align:left; white-space:pre-wrap;">${oauthUrlString}</pre>
+            `;
+
+            setTimeout(() => {
+                window.location.replace(oauthUrlString);
+            }, 5000);
         }
 
         function showWidgetLogin() {
