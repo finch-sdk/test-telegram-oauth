@@ -13,40 +13,40 @@
 
     <script>
         const contentEl = document.getElementById('content');
+        const url = new URL(window.location.href);
+        const params = url.searchParams;
+        const botUsername = params.get('bot');
+        const callbackBase = params.get('cb');
 
-        // 讀取 URL 上的授權資料（data-auth-url redirect 會帶在 query 上）
         function getAuthDataFromQuery() {
-            const params = new URLSearchParams(window.location.search);
+            const p = new URLSearchParams(window.location.search);
             const result = {};
-            for (const [key, value] of params.entries()) {
+            for (const [key, value] of p.entries()) {
+                if (key === 'bot' || key === 'cb') continue;
                 result[key] = value;
             }
             return Object.keys(result).length > 0 ? result : null;
         }
 
-        // 情況 1：從 Telegram Login Widget 授權回來，URL 上有 id / hash 等參數
         const authData = getAuthDataFromQuery();
 
         if (authData && authData.id && authData.hash) {
-            // 將 Telegram 回傳的參數原樣帶回 App（URL Scheme）
-            const callbackUrl = 'easypoker://telegram-auth?' + new URLSearchParams(authData).toString();
-
-            // 嘗試喚起 App
+            const callbackUrl = callbackBase + '?' + new URLSearchParams(authData).toString();
+            console.log('[Telegram OAuth] Redirecting to app:', callbackUrl);
             window.location.href = callbackUrl;
-
             contentEl.innerHTML = '<p>Authorization successful. Redirecting to app...</p>';
         } else {
-            // 情況 2：首次打開頁面，顯示 Telegram Login Widget
             contentEl.innerHTML = '<p>Please login with Telegram:</p><div id="tg-login"></div>';
-
             const script = document.createElement('script');
             script.async = true;
             script.src = "https://telegram.org/js/telegram-widget.js?22";
-            script.setAttribute('data-telegram-login', 'testTgSignIn_bot'); // 你的 bot username（不要帶 @）
+            script.setAttribute('data-telegram-login', botUsername);
             script.setAttribute('data-size', 'large');
-            script.setAttribute('data-auth-url', 'https://finch-sdk.github.io/test-telegram-oauth'); // 本頁 URL
+            const authUrl = url.origin + url.pathname
+                + '?bot=' + encodeURIComponent(botUsername)
+                + '&cb=' + encodeURIComponent(callbackBase);
+            script.setAttribute('data-auth-url', authUrl);
             script.setAttribute('data-request-access', 'write');
-
             document.getElementById('tg-login').appendChild(script);
         }
     </script>
