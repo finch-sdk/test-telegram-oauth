@@ -50,18 +50,46 @@
             return null;
         }
         
-        // 从 URL 查询参数、cookie、storage 获取 bot 和 cb
-        let botUsername = params.get('bot') || getCookie('tg_bot');
-        let callbackBase = params.get('cb') || getCookie('tg_cb');
+        // 从 URL 查询参数获取 bot 和 cb
+        // 注意：cb 参数可能包含 bot 和最终的 callbackBase，需要解析
+        let botUsername = params.get('bot');
+        let callbackBase = params.get('cb');
+        let finalCallbackBase = callbackBase; // 最终的 callbackBase（用于重定向到 Android app）
         
-        // 如果 URL 中有 bot 和 cb 参数，保存到 cookie（最可靠的方式）
+        // 如果 cb 参数存在，尝试从中解析 bot 和最终的 callbackBase
+        if (callbackBase) {
+            try {
+                const cbUrl = new URL(callbackBase);
+                const cbParams = cbUrl.searchParams;
+                // 如果 cb 参数中包含 bot，使用它
+                if (cbParams.get('bot')) {
+                    botUsername = cbParams.get('bot');
+                }
+                // 如果 cb 参数中包含嵌套的 cb，提取最终的 callbackBase
+                if (cbParams.get('cb')) {
+                    finalCallbackBase = cbParams.get('cb');
+                } else {
+                    // 否则，使用 cb 参数的 base URL（移除查询参数）
+                    finalCallbackBase = cbUrl.origin + cbUrl.pathname;
+                }
+            } catch (e) {
+                // cb 不是有效的 URL，使用原始值
+                finalCallbackBase = callbackBase;
+            }
+        }
+        
+        // 如果还是没有，尝试从 cookie 获取（作为备选）
+        if (!botUsername || !callbackBase) {
+            botUsername = botUsername || getCookie('tg_bot');
+            callbackBase = callbackBase || getCookie('tg_cb');
+        }
+        
+        // 如果 URL 中有 bot 和 cb 参数，保存到 cookie（作为备选）
         let saveResult = 'not saved';
         if (params.get('bot') && params.get('cb')) {
             try {
                 setCookie('tg_bot', params.get('bot'));
                 setCookie('tg_cb', params.get('cb'));
-                botUsername = params.get('bot');
-                callbackBase = params.get('cb');
                 saveResult = 'saved to cookie';
             } catch (e) {
                 saveResult = 'cookie save failed: ' + e.message;
@@ -88,7 +116,8 @@
                     <strong>Debug Info:</strong><br>
                     URL: ${window.location.href}<br>
                     botUsername: ${botUsername || '(empty)'}<br>
-                    callbackBase: ${callbackBase || '(empty)'}<br>
+                    callbackBase (from URL): ${callbackBase || '(empty)'}<br>
+                    finalCallbackBase (for redirect): ${finalCallbackBase || '(empty)'}<br>
                     All params: ${JSON.stringify(Array.from(params.entries()))}<br>
                     Save/Load result: ${saveResult}<br>
                     From cookie: bot=${getCookie('tg_bot') || '(empty)'}, cb=${getCookie('tg_cb') || '(empty)'}<br>
@@ -110,7 +139,7 @@
         }
 
         function handleAuthCallback(authData) {
-            if (!authData || !authData.id || !authData.hash || !callbackBase) {
+            if (!authData || !authData.id || !authData.hash || !finalCallbackBase) {
                 return false;
             }
             // 清除 cookie、sessionStorage 和 localStorage
@@ -124,7 +153,7 @@
             } catch (e) {
                 console.error('Failed to clear storage:', e);
             }
-            const callbackUrl = callbackBase + '?' + new URLSearchParams(authData).toString();
+            const callbackUrl = finalCallbackBase + '?' + new URLSearchParams(authData).toString();
             contentEl.innerHTML = '<p>Authorization successful. Redirecting...</p>';
             window.location.href = callbackUrl;
             return true;
