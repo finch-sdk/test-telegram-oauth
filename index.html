@@ -31,21 +31,41 @@
         const url = new URL(window.location.href);
         const params = url.searchParams;
         
-        // 从 URL hash fragment 解析 bot 和 cb（Telegram widget 不会替换 hash）
-        let botUsername = null;
-        let callbackBase = null;
+        // 辅助函数：设置 cookie
+        function setCookie(name, value, days = 1) {
+            const expires = new Date();
+            expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
+            document.cookie = name + '=' + encodeURIComponent(value) + ';expires=' + expires.toUTCString() + ';path=/';
+        }
         
-        // 首先尝试从 URL 查询参数获取
+        // 辅助函数：获取 cookie
+        function getCookie(name) {
+            const nameEQ = name + '=';
+            const ca = document.cookie.split(';');
+            for (let i = 0; i < ca.length; i++) {
+                let c = ca[i];
+                while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+                if (c.indexOf(nameEQ) === 0) return decodeURIComponent(c.substring(nameEQ.length, c.length));
+            }
+            return null;
+        }
+        
+        // 从 URL 查询参数、cookie、storage 获取 bot 和 cb
+        let botUsername = params.get('bot') || getCookie('tg_bot');
+        let callbackBase = params.get('cb') || getCookie('tg_cb');
+        
+        // 如果 URL 中有 bot 和 cb 参数，保存到 cookie（最可靠的方式）
+        let saveResult = 'not saved';
         if (params.get('bot') && params.get('cb')) {
-            botUsername = params.get('bot');
-            callbackBase = params.get('cb');
-            // 保存到 hash fragment，这样 Telegram widget 回调时不会丢失
-            window.location.hash = 'bot=' + encodeURIComponent(botUsername) + '&cb=' + encodeURIComponent(callbackBase);
-        } else if (window.location.hash) {
-            // 从 hash fragment 获取
-            const hashParams = new URLSearchParams(window.location.hash.substring(1));
-            botUsername = hashParams.get('bot');
-            callbackBase = hashParams.get('cb');
+            try {
+                setCookie('tg_bot', params.get('bot'));
+                setCookie('tg_cb', params.get('cb'));
+                botUsername = params.get('bot');
+                callbackBase = params.get('cb');
+                saveResult = 'saved to cookie';
+            } catch (e) {
+                saveResult = 'cookie save failed: ' + e.message;
+            }
         }
         
         // 如果还是没有，尝试从 storage 获取（作为最后的备选）
@@ -53,22 +73,11 @@
             try {
                 botUsername = botUsername || sessionStorage.getItem('tg_bot') || localStorage.getItem('tg_bot');
                 callbackBase = callbackBase || sessionStorage.getItem('tg_cb') || localStorage.getItem('tg_cb');
+                if (botUsername && callbackBase) {
+                    saveResult = 'loaded from storage';
+                }
             } catch (e) {
                 // Storage 不可用
-            }
-        }
-        
-        // 如果 URL 查询参数中有 bot 和 cb，也保存到 storage（作为备选）
-        let storageSaveResult = 'not saved';
-        if (params.get('bot') && params.get('cb')) {
-            try {
-                sessionStorage.setItem('tg_bot', params.get('bot'));
-                sessionStorage.setItem('tg_cb', params.get('cb'));
-                localStorage.setItem('tg_bot', params.get('bot'));
-                localStorage.setItem('tg_cb', params.get('cb'));
-                storageSaveResult = 'saved to storage';
-            } catch (e) {
-                storageSaveResult = 'storage not available';
             }
         }
         
@@ -78,11 +87,11 @@
                 <div style="text-align: left; margin: 20px; padding: 10px; background: #f0f0f0; border-radius: 5px; font-size: 12px;">
                     <strong>Debug Info:</strong><br>
                     URL: ${window.location.href}<br>
-                    Hash: ${window.location.hash || '(empty)'}<br>
                     botUsername: ${botUsername || '(empty)'}<br>
                     callbackBase: ${callbackBase || '(empty)'}<br>
                     All params: ${JSON.stringify(Array.from(params.entries()))}<br>
-                    Storage save result: ${storageSaveResult}<br>
+                    Save/Load result: ${saveResult}<br>
+                    From cookie: bot=${getCookie('tg_bot') || '(empty)'}, cb=${getCookie('tg_cb') || '(empty)'}<br>
                     From sessionStorage: bot=${sessionStorage.getItem('tg_bot') || '(empty)'}, cb=${sessionStorage.getItem('tg_cb') || '(empty)'}<br>
                     From localStorage: bot=${localStorage.getItem('tg_bot') || '(empty)'}, cb=${localStorage.getItem('tg_cb') || '(empty)'}
                 </div>
@@ -104,8 +113,10 @@
             if (!authData || !authData.id || !authData.hash || !callbackBase) {
                 return false;
             }
-            // 清除 sessionStorage 和 localStorage
+            // 清除 cookie、sessionStorage 和 localStorage
             try {
+                setCookie('tg_bot', '', -1); // 删除 cookie
+                setCookie('tg_cb', '', -1);
                 sessionStorage.removeItem('tg_bot');
                 sessionStorage.removeItem('tg_cb');
                 localStorage.removeItem('tg_bot');
@@ -130,14 +141,9 @@
             script.src = 'https://telegram.org/js/telegram-widget.js?22';
             script.setAttribute('data-telegram-login', botUsername);
             script.setAttribute('data-size', 'large');
-            // 构建 auth-url，同时使用查询参数和 hash fragment
-            // 查询参数：Telegram widget 可能会替换，但先尝试
-            // Hash fragment：作为备选，Telegram widget 不会替换
-            const authUrl = url.origin + url.pathname
-                + '?bot=' + encodeURIComponent(botUsername || '')
-                + '&cb=' + encodeURIComponent(callbackBase || '')
-                + '#bot=' + encodeURIComponent(botUsername || '')
-                + '&cb=' + encodeURIComponent(callbackBase || '');
+            // 构建 auth-url（Telegram widget 会完全替换 URL，所以参数会丢失）
+            // 但我们已经将 bot 和 cb 保存到 cookie，所以回调时可以从 cookie 读取
+            const authUrl = url.origin + url.pathname;
             script.setAttribute('data-auth-url', authUrl);
             console.log('Setting data-auth-url:', authUrl);
             script.setAttribute('data-request-access', 'write');
