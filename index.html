@@ -30,8 +30,16 @@
         const contentEl = document.getElementById('content');
         const url = new URL(window.location.href);
         const params = url.searchParams;
-        const botUsername = params.get('bot');
-        const callbackBase = params.get('cb');
+        
+        // 从 URL 参数或 sessionStorage 获取 bot 和 cb
+        let botUsername = params.get('bot') || sessionStorage.getItem('tg_bot');
+        let callbackBase = params.get('cb') || sessionStorage.getItem('tg_cb');
+        
+        // 如果 URL 中有 bot 和 cb 参数，保存到 sessionStorage
+        if (params.get('bot') && params.get('cb')) {
+            sessionStorage.setItem('tg_bot', params.get('bot'));
+            sessionStorage.setItem('tg_cb', params.get('cb'));
+        }
         
         // 调试信息显示在页面上
         function showDebugInfo() {
@@ -41,7 +49,8 @@
                     URL: ${window.location.href}<br>
                     botUsername: ${botUsername || '(empty)'}<br>
                     callbackBase: ${callbackBase || '(empty)'}<br>
-                    All params: ${JSON.stringify(Array.from(params.entries()))}
+                    All params: ${JSON.stringify(Array.from(params.entries()))}<br>
+                    From sessionStorage: bot=${sessionStorage.getItem('tg_bot') || '(empty)'}, cb=${sessionStorage.getItem('tg_cb') || '(empty)'}
                 </div>
             `;
             return debugInfo;
@@ -61,6 +70,9 @@
             if (!authData || !authData.id || !authData.hash || !callbackBase) {
                 return false;
             }
+            // 清除 sessionStorage
+            sessionStorage.removeItem('tg_bot');
+            sessionStorage.removeItem('tg_cb');
             const callbackUrl = callbackBase + '?' + new URLSearchParams(authData).toString();
             contentEl.innerHTML = '<p>Authorization successful. Redirecting...</p>';
             window.location.href = callbackUrl;
