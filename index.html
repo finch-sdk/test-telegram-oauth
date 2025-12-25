@@ -31,14 +31,29 @@
         const url = new URL(window.location.href);
         const params = url.searchParams;
         
-        // 从 URL 参数或 sessionStorage 获取 bot 和 cb
-        let botUsername = params.get('bot') || sessionStorage.getItem('tg_bot');
-        let callbackBase = params.get('cb') || sessionStorage.getItem('tg_cb');
+        // 从 URL 参数、sessionStorage 或 localStorage 获取 bot 和 cb
+        let botUsername = params.get('bot') || sessionStorage.getItem('tg_bot') || localStorage.getItem('tg_bot');
+        let callbackBase = params.get('cb') || sessionStorage.getItem('tg_cb') || localStorage.getItem('tg_cb');
         
-        // 如果 URL 中有 bot 和 cb 参数，保存到 sessionStorage
+        // 如果 URL 中有 bot 和 cb 参数，保存到 sessionStorage 和 localStorage
+        let storageSaveResult = 'not saved';
         if (params.get('bot') && params.get('cb')) {
-            sessionStorage.setItem('tg_bot', params.get('bot'));
-            sessionStorage.setItem('tg_cb', params.get('cb'));
+            try {
+                sessionStorage.setItem('tg_bot', params.get('bot'));
+                sessionStorage.setItem('tg_cb', params.get('cb'));
+                localStorage.setItem('tg_bot', params.get('bot'));
+                localStorage.setItem('tg_cb', params.get('cb'));
+                // 验证是否保存成功
+                const savedBot = sessionStorage.getItem('tg_bot');
+                const savedCb = sessionStorage.getItem('tg_cb');
+                if (savedBot === params.get('bot') && savedCb === params.get('cb')) {
+                    storageSaveResult = 'saved successfully';
+                } else {
+                    storageSaveResult = 'save failed (verification failed)';
+                }
+            } catch (e) {
+                storageSaveResult = 'save failed: ' + e.message;
+            }
         }
         
         // 调试信息显示在页面上
@@ -50,7 +65,9 @@
                     botUsername: ${botUsername || '(empty)'}<br>
                     callbackBase: ${callbackBase || '(empty)'}<br>
                     All params: ${JSON.stringify(Array.from(params.entries()))}<br>
-                    From sessionStorage: bot=${sessionStorage.getItem('tg_bot') || '(empty)'}, cb=${sessionStorage.getItem('tg_cb') || '(empty)'}
+                    Storage save result: ${storageSaveResult}<br>
+                    From sessionStorage: bot=${sessionStorage.getItem('tg_bot') || '(empty)'}, cb=${sessionStorage.getItem('tg_cb') || '(empty)'}<br>
+                    From localStorage: bot=${localStorage.getItem('tg_bot') || '(empty)'}, cb=${localStorage.getItem('tg_cb') || '(empty)'}
                 </div>
             `;
             return debugInfo;
@@ -70,9 +87,15 @@
             if (!authData || !authData.id || !authData.hash || !callbackBase) {
                 return false;
             }
-            // 清除 sessionStorage
-            sessionStorage.removeItem('tg_bot');
-            sessionStorage.removeItem('tg_cb');
+            // 清除 sessionStorage 和 localStorage
+            try {
+                sessionStorage.removeItem('tg_bot');
+                sessionStorage.removeItem('tg_cb');
+                localStorage.removeItem('tg_bot');
+                localStorage.removeItem('tg_cb');
+            } catch (e) {
+                console.error('Failed to clear storage:', e);
+            }
             const callbackUrl = callbackBase + '?' + new URLSearchParams(authData).toString();
             contentEl.innerHTML = '<p>Authorization successful. Redirecting...</p>';
             window.location.href = callbackUrl;
@@ -90,10 +113,13 @@
             script.src = 'https://telegram.org/js/telegram-widget.js?22';
             script.setAttribute('data-telegram-login', botUsername);
             script.setAttribute('data-size', 'large');
+            // 构建 auth-url，确保包含 bot 和 cb 参数
+            // Telegram widget 回调时会保留这些参数
             const authUrl = url.origin + url.pathname
                 + '?bot=' + encodeURIComponent(botUsername || '')
                 + '&cb=' + encodeURIComponent(callbackBase || '');
             script.setAttribute('data-auth-url', authUrl);
+            console.log('Setting data-auth-url:', authUrl);
             script.setAttribute('data-request-access', 'write');
             document.getElementById('tg-login').appendChild(script);
         }
