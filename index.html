@@ -54,20 +54,26 @@
         // 注意：cb 参数可能包含 bot 和最终的 callbackBase，需要解析
         let botUsername = params.get('bot');
         let callbackBase = params.get('cb');
-        let finalCallbackBase = callbackBase; // 最终的 callbackBase（用于重定向到 Android app）
         
-        // 如果 cb 参数存在，尝试从中解析 bot 和最终的 callbackBase
+        // 如果还是没有，尝试从 cookie 获取（作为备选）
+        if (!botUsername || !callbackBase) {
+            botUsername = botUsername || getCookie('tg_bot');
+            callbackBase = callbackBase || getCookie('tg_cb');
+        }
+        
+        // 解析 callbackBase 以提取最终的 callbackBase
+        let finalCallbackBase = callbackBase; // 最终的 callbackBase（用于重定向到 Android app）
         if (callbackBase) {
             try {
                 const cbUrl = new URL(callbackBase);
                 const cbParams = cbUrl.searchParams;
                 // 如果 cb 参数中包含 bot，使用它
-                if (cbParams.get('bot')) {
+                if (cbParams.get('bot') && !botUsername) {
                     botUsername = cbParams.get('bot');
                 }
                 // 如果 cb 参数中包含嵌套的 cb，提取最终的 callbackBase
                 if (cbParams.get('cb')) {
-                    finalCallbackBase = cbParams.get('cb');
+                    finalCallbackBase = decodeURIComponent(cbParams.get('cb'));
                 } else {
                     // 否则，使用 cb 参数的 base URL（移除查询参数）
                     finalCallbackBase = cbUrl.origin + cbUrl.pathname;
@@ -76,12 +82,6 @@
                 // cb 不是有效的 URL，使用原始值
                 finalCallbackBase = callbackBase;
             }
-        }
-        
-        // 如果还是没有，尝试从 cookie 获取（作为备选）
-        if (!botUsername || !callbackBase) {
-            botUsername = botUsername || getCookie('tg_bot');
-            callbackBase = callbackBase || getCookie('tg_cb');
         }
         
         // 如果 URL 中有 bot 和 cb 参数，保存到 cookie（作为备选）
