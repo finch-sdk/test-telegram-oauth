@@ -31,11 +31,34 @@
         const url = new URL(window.location.href);
         const params = url.searchParams;
         
-        // 从 URL 参数、sessionStorage 或 localStorage 获取 bot 和 cb
-        let botUsername = params.get('bot') || sessionStorage.getItem('tg_bot') || localStorage.getItem('tg_bot');
-        let callbackBase = params.get('cb') || sessionStorage.getItem('tg_cb') || localStorage.getItem('tg_cb');
+        // 从 URL hash fragment 解析 bot 和 cb（Telegram widget 不会替换 hash）
+        let botUsername = null;
+        let callbackBase = null;
         
-        // 如果 URL 中有 bot 和 cb 参数，保存到 sessionStorage 和 localStorage
+        // 首先尝试从 URL 查询参数获取
+        if (params.get('bot') && params.get('cb')) {
+            botUsername = params.get('bot');
+            callbackBase = params.get('cb');
+            // 保存到 hash fragment，这样 Telegram widget 回调时不会丢失
+            window.location.hash = 'bot=' + encodeURIComponent(botUsername) + '&cb=' + encodeURIComponent(callbackBase);
+        } else if (window.location.hash) {
+            // 从 hash fragment 获取
+            const hashParams = new URLSearchParams(window.location.hash.substring(1));
+            botUsername = hashParams.get('bot');
+            callbackBase = hashParams.get('cb');
+        }
+        
+        // 如果还是没有，尝试从 storage 获取（作为最后的备选）
+        if (!botUsername || !callbackBase) {
+            try {
+                botUsername = botUsername || sessionStorage.getItem('tg_bot') || localStorage.getItem('tg_bot');
+                callbackBase = callbackBase || sessionStorage.getItem('tg_cb') || localStorage.getItem('tg_cb');
+            } catch (e) {
+                // Storage 不可用
+            }
+        }
+        
+        // 如果 URL 查询参数中有 bot 和 cb，也保存到 storage（作为备选）
         let storageSaveResult = 'not saved';
         if (params.get('bot') && params.get('cb')) {
             try {
@@ -43,16 +66,9 @@
                 sessionStorage.setItem('tg_cb', params.get('cb'));
                 localStorage.setItem('tg_bot', params.get('bot'));
                 localStorage.setItem('tg_cb', params.get('cb'));
-                // 验证是否保存成功
-                const savedBot = sessionStorage.getItem('tg_bot');
-                const savedCb = sessionStorage.getItem('tg_cb');
-                if (savedBot === params.get('bot') && savedCb === params.get('cb')) {
-                    storageSaveResult = 'saved successfully';
-                } else {
-                    storageSaveResult = 'save failed (verification failed)';
-                }
+                storageSaveResult = 'saved to storage';
             } catch (e) {
-                storageSaveResult = 'save failed: ' + e.message;
+                storageSaveResult = 'storage not available';
             }
         }
         
@@ -62,6 +78,7 @@
                 <div style="text-align: left; margin: 20px; padding: 10px; background: #f0f0f0; border-radius: 5px; font-size: 12px;">
                     <strong>Debug Info:</strong><br>
                     URL: ${window.location.href}<br>
+                    Hash: ${window.location.hash || '(empty)'}<br>
                     botUsername: ${botUsername || '(empty)'}<br>
                     callbackBase: ${callbackBase || '(empty)'}<br>
                     All params: ${JSON.stringify(Array.from(params.entries()))}<br>
@@ -113,10 +130,13 @@
             script.src = 'https://telegram.org/js/telegram-widget.js?22';
             script.setAttribute('data-telegram-login', botUsername);
             script.setAttribute('data-size', 'large');
-            // 构建 auth-url，确保包含 bot 和 cb 参数
-            // Telegram widget 回调时会保留这些参数
+            // 构建 auth-url，同时使用查询参数和 hash fragment
+            // 查询参数：Telegram widget 可能会替换，但先尝试
+            // Hash fragment：作为备选，Telegram widget 不会替换
             const authUrl = url.origin + url.pathname
                 + '?bot=' + encodeURIComponent(botUsername || '')
+                + '&cb=' + encodeURIComponent(callbackBase || '')
+                + '#bot=' + encodeURIComponent(botUsername || '')
                 + '&cb=' + encodeURIComponent(callbackBase || '');
             script.setAttribute('data-auth-url', authUrl);
             console.log('Setting data-auth-url:', authUrl);
